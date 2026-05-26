@@ -37,6 +37,41 @@ describe('Vite integration tests', () => {
         expect(typeof firstPlugin.transform).toBe('function');
     });
 
+    it('forces instrumented packages into ssr.noExternal', () => {
+        const plugin = codeTransformerPlugin({
+            instrumentations: [
+                commonTestCases.commonjs.instrumentation,
+                commonTestCases.esmodule.instrumentation,
+                {
+                    channelName: 'test:other',
+                    module: { name: 'other-module', versionRange: '*', filePath: 'index.js' },
+                    functionQuery: { functionName: 'fn', kind: 'Sync' as const },
+                },
+                // duplicate name should be deduplicated
+                {
+                    channelName: 'test:dup',
+                    module: { name: 'test-module', versionRange: '*', filePath: 'other.js' },
+                    functionQuery: { functionName: 'fn', kind: 'Sync' as const },
+                },
+            ],
+        });
+
+        const firstPlugin = Array.isArray(plugin) ? plugin[0] : plugin;
+        const result = firstPlugin.config({}, { command: 'build', mode: 'production' });
+        expect(result).toEqual({
+            ssr: {
+                noExternal: ['test-module', 'other-module'],
+            },
+        });
+    });
+
+    it('returns an empty noExternal list when there are no instrumentations', () => {
+        const plugin = codeTransformerPlugin({ instrumentations: [] });
+        const firstPlugin = Array.isArray(plugin) ? plugin[0] : plugin;
+        const result = firstPlugin.config({}, { command: 'build', mode: 'production' });
+        expect(result).toEqual({ ssr: { noExternal: [] } });
+    });
+
     it('should integrate with vite and transform ES modules', async () => {
         const testCase = commonTestCases.esmodule;
         const testFile = join(fixture.moduleDir, testCase.filename);

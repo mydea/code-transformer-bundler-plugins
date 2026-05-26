@@ -40,8 +40,24 @@ const unplugin = createUnplugin<CodeTransformerPluginOptions>((options) => {
     // Create the code transformer instrumentor
     const instrumentationMatcher = create(instrumentations, dcModule);
 
+    const instrumentedPackages = Array.from(
+        new Set(instrumentations.map((i) => i.module.name)),
+    );
+
     return {
         name: 'code-transformer',
+        vite: {
+            config() {
+                // Vite externalizes `node_modules` during SSR builds by default,
+                // which prevents `transform` from running on them. Force the
+                // packages we want to instrument into the bundle.
+                return {
+                    ssr: {
+                        noExternal: instrumentedPackages,
+                    },
+                };
+            },
+        },
         transform(code: string, id: string) {
             // Determine the module type using multiple methods for accurate detection
             const ext = extname(id);
